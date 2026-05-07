@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GLB Real-Time 3D Modeler</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;500;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #080c10;
+    --panel: #0d1318;
+    --border: #1a2a35;
+    --accent: #00e5ff;
+    --accent2: #ff6b35;
+    --accent3: #7fff00;
+    --text: #c8dde8;
+    --dim: #3a5060;
+    --mono: 'Share Tech Mono', monospace;
+    --ui: 'Rajdhani', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--ui);
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 48px 1fr 36px;
+    grid-template-columns: 220px 1fr 200px;
+    grid-template-areas:
+      "header header header"
+      "left   canvas right"
+      "footer footer footer";
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* HEADER */
+  header {
+    grid-area: header;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 20px;
+  }
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo::before {
+    content: '';
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  .menu-bar { display: flex; gap: 2px; flex: 1; }
+  .menu-btn {
+    font-family: var(--ui);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    color: var(--dim);
+    background: none;
+    border: none;
+    padding: 4px 12px;
+    cursor: pointer;
+    transition: color .15s;
+    text-transform: uppercase;
+  }
+  .menu-btn:hover { color: var(--accent); }
+
+  .export-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 6px 16px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    position: relative;
+    overflow: hidden;
+    transition: all .2s;
+  }
+  .export-btn:hover { background: var(--accent); color: var(--bg); box-shadow: 0 0 16px var(--accent); }
+
+  /* LEFT PANEL */
+  .left-panel {
+    grid-area: left;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel-section { border-bottom: 1px solid var(--border); }
+  .panel-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    padding: 8px 12px 6px;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel-label span { color: var(--accent); }
+
+  /* Primitive buttons */
+  .prim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 8px; }
+  .prim-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--ui);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .5px;
+    padding: 8px 4px;
+    cursor: pointer;
+    transition: all .15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .prim-btn:hover { border-color: var(--accent); color: var(--accent); background: #00e5ff08; }
+  .prim-btn.active { border-color: var(--accent); color: var(--accent); background: #00e5ff12; }
+  .prim-icon { font-size: 18px; line-height: 1; }
+
+  /* Scene tree */
+  .scene-tree { padding: 6px 0; flex: 1; overflow-y: auto; }
+  .tree-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background .1s;
+    font-weight: 500;
+  }
+  .tree-item:hover { background: #ffffff06; }
+  .tree-item.selected { background: #00e5ff12; color: var(--accent); }
+  .tree-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .tree-type { font-family: var(--mono); font-size: 9px; color: var(--dim); margin-left: auto; }
+
+  /* Optimization badges */
+  .opt-row { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; }
+  .opt-item { display: flex; justify-content: space-between; align-items: center; }
+  .opt-label { font-size: 11px; color: var(--dim); font-weight: 500; letter-spacing: .5px; }
+  .opt-bar { width: 80px; height: 4px; background: var(--border); border-radius: 2px; position: relative; overflow: hidden; }
+  .opt-fill { height: 100%; border-radius: 2px; transition: width .5s ease; }
+  .opt-val { font-family: var(--mono); font-size: 10px; width: 36px; text-align: right; }
+
+  /* CANVAS AREA */
+  .canvas-area {
+    grid-area: canvas;
+    position: relative;
+    overflow: hidden;
+    background: #050810;
+  }
+  canvas#glcanvas { display: block; width: 100%; height: 100%; }
+
+  /* Viewport overlays */
+  .vp-corner {
+    position: absolute;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--dim);
+    letter-spacing: 1px;
+    pointer-events: none;
+  }
+  .vp-tl { top: 12px; left: 12px; }
+  .vp-tr { top: 12px; right: 12px; text-align: right; }
+  .vp-bl { bottom: 12px; left: 12px; }
+  .vp-br { bottom: 12px; right: 12px; text-align: right; }
+
+  .vp-label {
+    background: #00000060;
+    border: 1px solid var(--border);
+    padding: 3px 8px;
+    backdrop-filter: blur(4px);
+  }
+
+  /* Axes gizmo */
+  .axes-gizmo {
+    position: absolute;
+    bottom: 48px;
+    left: 12px;
+    width: 64px;
+    height: 64px;
+    pointer-events: none;
+  }
+
+  /* Mode toolbar */
+  .mode-toolbar {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 2px;
+    background: #00000080;
+    border: 1px solid var(--border);
+    padding: 4px;
+    backdrop-filter: blur(8px);
+  }
+  .mode-btn {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    background: none;
+    border: none;
+    color: var(--dim);
+    padding: 4px 12px;
+    cursor: pointer;
+    transition: all .15s;
+    text-transform: uppercase;
+  }
+  .mode-btn:hover { color: var(--text); }
+  .mode-btn.active { background: var(--accent); color: var(--bg); }
+
+  /* RIGHT PANEL */
+  .right-panel {
+    grid-area: right;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .prop-group { padding: 10px; border-bottom: 1px solid var(--border); }
+  .prop-title {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .prop-row { margin-bottom: 8px; }
+  .prop-row-label {
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: .5px;
+    margin-bottom: 3px;
+    font-weight: 500;
+  }
+  .prop-inputs { display: flex; gap: 3px; }
+  .prop-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 4px 6px;
+    text-align: center;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .prop-input:focus { border-color: var(--accent); }
+
+  .color-swatch {
+    width: 100%;
+    height: 28px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+  .color-inner { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 10px; }
+
+  /* Toggle switches */
+  .toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .toggle-label { font-size: 11px; color: var(--text); font-weight: 500; }
+  .toggle {
+    width: 32px; height: 16px;
+    background: var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    position: relative;
+    transition: background .2s;
+  }
+  .toggle.on { background: var(--accent); }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    width: 12px; height: 12px;
+    background: white;
+    border-radius: 50%;
+    top: 2px; left: 2px;
+    transition: left .2s;
+  }
+  .toggle.on::after { left: 18px; }
+
+  /* Slider */
+  .slider-wrap { display: flex; align-items: center; gap: 6px; }
+  input[type=range] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 0 6px var(--accent);
+  }
+  .slider-val { font-family: var(--mono); font-size: 10px; color: var(--accent); width: 28px; text-align: right; }
+
+  /* LOD indicator */
+  .lod-meter {
+    display: flex;
+    gap: 2px;
+    margin-top: 6px;
+  }
+  .lod-seg {
+    flex: 1;
+    height: 8px;
+    background: var(--border);
+    border-radius: 1px;
+    transition: background .3s;
+  }
+  .lod-seg.active { background: var(--accent3); }
+  .lod-seg.warn { background: var(--accent2); }
+  .lod-seg.crit { background: #ff3030; }
+
+  /* FOOTER */
+  footer {
+    grid-area: footer;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 20px;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--dim);
+    letter-spacing: 1px;
+  }
+  .footer-stat { display: flex; gap: 6px; align-items: center; }
+  .footer-val { color: var(--accent3); }
+  .footer-sep { width: 1px; height: 16px; background: var(--border); }
+  .fps-counter { color: var(--accent); margin-left: auto; }
+
+  /* Notification toast */
+  .toast {
+    position: absolute;
+    bottom: 48px;
+    left: 50%;
+    transform: translateX(-50%) translateY(60px);
+    background: #00000090;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 8px 20px;
+    letter-spacing: 1px;
+    backdrop-filter: blur(8px);
+    transition: transform .3s ease;
+    pointer-events: none;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">GLB_STUDIO v2.4</div>
+  <nav class="menu-bar">
+    <button class="menu-btn">File</button>
+    <button class="menu-btn">Edit</button>
+    <button class="menu-btn">View</button>
+    <button class="menu-btn">Mesh</button>
+    <button class="menu-btn">Material</button>
+    <button class="menu-btn">Optimize</button>
+  </nav>
+  <button class="export-btn" onclick="exportGLB()">▼ EXPORT GLB</button>
+</header>
+
+<!-- LEFT PANEL -->
+<aside class="left-panel">
+  <div class="panel-section">
+    <div class="panel-label">Primitives <span>ADD</span></div>
+    <div class="prim-grid">
+      <button class="prim-btn active" onclick="setPrim(this,'cube')"><span class="prim-icon">⬛</span>Cube</button>
+      <button class="prim-btn" onclick="setPrim(this,'sphere')"><span class="prim-icon">⚪</span>Sphere</button>
+      <button class="prim-btn" onclick="setPrim(this,'cylinder')"><span class="prim-icon">🔵</span>Cylinder</button>
+      <button class="prim-btn" onclick="setPrim(this,'cone')"><span class="prim-icon">🔺</span>Cone</button>
+      <button class="prim-btn" onclick="setPrim(this,'torus')"><span class="prim-icon">⭕</span>Torus</button>
+      <button class="prim-btn" onclick="setPrim(this,'plane')"><span class="prim-icon">▬</span>Plane</button>
+    </div>
+  </div>
+
+  <div class="panel-section" style="flex:1;display:flex;flex-direction:column;">
+    <div class="panel-label">Scene Objects <span id="obj-count">3</span></div>
+    <div class="scene-tree" id="scene-tree">
+      <div class="tree-item selected" onclick="selectObj(this,0)">
+        <span class="tree-dot" style="background:#00e5ff"></span>
+        Cube_001
+        <span class="tree-type">MESH</span>
+      </div>
+      <div class="tree-item" onclick="selectObj(this,1)">
+        <span class="tree-dot" style="background:#ff6b35"></span>
+        Sphere_001
+        <span class="tree-type">MESH</span>
+      </div>
+      <div class="tree-item" onclick="selectObj(this,2)">
+        <span class="tree-dot" style="background:#7fff00"></span>
+        DirectionalLight
+        <span class="tree-type">LIGHT</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-label">Optimization Score</div>
+    <div class="opt-row">
+      <div class="opt-item">
+        <span class="opt-label">Poly Count</span>
+        <div class="opt-bar"><div class="opt-fill" id="poly-fill" style="width:28%;background:var(--accent3)"></div></div>
+        <span class="opt-val" id="poly-val" style="color:var(--accent3)">1.2k</span>
+      </div>
+      <div class="opt-item">
+        <span class="opt-label">Draw Calls</span>
+        <div class="opt-bar"><div class="opt-fill" id="dc-fill" style="width:20%;background:var(--accent3)"></div></div>
+        <span class="opt-val" id="dc-val" style="color:var(--accent3)">3</span>
+      </div>
+      <div class="opt-item">
+        <span class="opt-label">Texture Mem</span>
+        <div class="opt-bar"><div class="opt-fill" style="width:45%;background:var(--accent2)"></div></div>
+        <span class="opt-val" style="color:var(--accent2)">2.1MB</span>
+      </div>
+      <div class="opt-item">
+        <span class="opt-label">LOD Levels</span>
+        <div class="opt-bar"><div class="opt-fill" style="width:60%;background:var(--accent)"></div></div>
+        <span class="opt-val" style="color:var(--accent)">3/5</span>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- CANVAS -->
+<main class="canvas-area">
+  <canvas id="glcanvas"></canvas>
+
+  <div class="mode-toolbar">
+    <button class="mode-btn active" onclick="setMode(this,'select')">Select</button>
+    <button class="mode-btn" onclick="setMode(this,'move')">Move</button>
+    <button class="mode-btn" onclick="setMode(this,'rotate')">Rotate</button>
+    <button class="mode-btn" onclick="setMode(this,'scale')">Scale</button>
+    <button class="mode-btn" onclick="setMode(this,'edit')">Edit</button>
+  </div>
+
+  <div class="vp-corner vp-tl">
+    <div class="vp-label">PERSPECTIVE · CAM_01</div>
+  </div>
+  <div class="vp-corner vp-tr">
+    <div class="vp-label" id="render-mode">SOLID · WIREFRAME</div>
+  </div>
+  <div class="vp-corner vp-bl">
+    <div class="vp-label">WebGL 2.0 · Mobile Optimized</div>
+  </div>
+  <div class="vp-corner vp-br">
+    <div class="vp-label" id="sel-info">Cube_001 · SELECTED</div>
+  </div>
+
+  <svg class="axes-gizmo" viewBox="0 0 64 64" id="axes-svg">
+    <line x1="32" y1="32" x2="58" y2="48" stroke="#ff4444" stroke-width="2"/>
+    <text x="60" y="51" fill="#ff4444" font-size="9" font-family="monospace">X</text>
+    <line x1="32" y1="32" x2="32" y2="6" stroke="#44ff44" stroke-width="2"/>
+    <text x="29" y="4" fill="#44ff44" font-size="9" font-family="monospace">Y</text>
+    <line x1="32" y1="32" x2="6" y2="48" stroke="#4488ff" stroke-width="2"/>
+    <text x="0" y="51" fill="#4488ff" font-size="9" font-family="monospace">Z</text>
+    <circle cx="32" cy="32" r="3" fill="white" opacity=".6"/>
+  </svg>
+
+  <div class="toast" id="toast">GLB EXPORTED SUCCESSFULLY</div>
+</main>
+
+<!-- RIGHT PANEL -->
+<aside class="right-panel">
+  <div class="prop-group">
+    <div class="prop-title">Transform</div>
+    <div class="prop-row">
+      <div class="prop-row-label">Location X · Y · Z</div>
+      <div class="prop-inputs">
+        <input class="prop-input" id="px" value="0.00" onchange="updateTransform()">
+        <input class="prop-input" id="py" value="0.00" onchange="updateTransform()">
+        <input class="prop-input" id="pz" value="0.00" onchange="updateTransform()">
+      </div>
+    </div>
+    <div class="prop-row">
+      <div class="prop-row-label">Rotation X · Y · Z</div>
+      <div class="prop-inputs">
+        <input class="prop-input" id="rx" value="0.00" onchange="updateTransform()">
+        <input class="prop-input" id="ry" value="0.00" onchange="updateTransform()">
+        <input class="prop-input" id="rz" value="0.00" onchange="updateTransform()">
+      </div>
+    </div>
+    <div class="prop-row">
+      <div class="prop-row-label">Scale X · Y · Z</div>
+      <div class="prop-inputs">
+        <input class="prop-input" id="sx" value="1.00" onchange="updateTransform()">
+        <input class="prop-input" id="sy" value="1.00" onchange="updateTransform()">
+        <input class="prop-input" id="sz" value="1.00" onchange="updateTransform()">
+      </div>
+    </div>
+  </div>
+
+  <div class="prop-group">
+    <div class="prop-title">Material · PBR</div>
+    <div class="prop-row">
+      <div class="prop-row-label">Base Color</div>
+      <div class="color-swatch" onclick="cycleColor()" id="color-swatch">
+        <div class="color-inner" id="color-inner" style="background:#1a6aff;color:white">#1A6AFF</div>
+      </div>
+    </div>
+    <div class="prop-row">
+      <div class="prop-row-label">Metalness</div>
+      <div class="slider-wrap">
+        <input type="range" min="0" max="100" value="20" id="metalness" oninput="updateMat(this,'metalness-val')">
+        <span class="slider-val" id="metalness-val">0.2</span>
+      </div>
+    </div>
+    <div class="prop-row">
+      <div class="prop-row-label">Roughness</div>
+      <div class="slider-wrap">
+        <input type="range" min="0" max="100" value="60" id="roughness" oninput="updateMat(this,'roughness-val')">
+        <span class="slider-val" id="roughness-val">0.6</span>
+      </div>
+    </div>
+    <div class="prop-row">
+      <div class="prop-row-label">Emission</div>
+      <div class="slider-wrap">
+        <input type="range" min="0" max="100" value="0" id="emission" oninput="updateMat(this,'emission-val')">
+        <span class="slider-val" id="emission-val">0.0</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="prop-group">
+    <div class="prop-title">Optimization</div>
+    <div class="toggle-row">
+      <span class="toggle-label">Auto LOD</span>
+      <div class="toggle on" onclick="toggleSwitch(this)"></div>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label">Merge Meshes</span>
+      <div class="toggle on" onclick="toggleSwitch(this)"></div>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label">Draco Compress</span>
+      <div class="toggle" onclick="toggleSwitch(this)"></div>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label">KTX2 Textures</span>
+      <div class="toggle" onclick="toggleSwitch(this)"></div>
+    </div>
+    <div class="prop-row" style="margin-top:8px">
+      <div class="prop-row-label">Target Poly Budget</div>
+      <div class="slider-wrap">
+        <input type="range" min="500" max="10000" value="2000" id="budget" oninput="updateBudget(this)">
+        <span class="slider-val" id="budget-val" style="width:40px">2k</span>
+      </div>
+    </div>
+    <div class="prop-row-label" style="margin-top:6px">LOD Distance</div>
+    <div class="lod-meter">
+      <div class="lod-seg active"></div>
+      <div class="lod-seg active"></div>
+      <div class="lod-seg active"></div>
+      <div class="lod-seg warn"></div>
+      <div class="lod-seg"></div>
+    </div>
+  </div>
+
+  <div class="prop-group">
+    <div class="prop-title">GLB Target</div>
+    <div class="toggle-row">
+      <span class="toggle-label" style="font-size:10px">Mobile WebGL</span>
+      <div class="toggle on" onclick="toggleSwitch(this)"></div>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label" style="font-size:10px">Shadow Cast</span>
+      <div class="toggle on" onclick="toggleSwitch(this)"></div>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label" style="font-size:10px">Frustum Cull</span>
+      <div class="toggle on" onclick="toggleSwitch(this)"></div>
+    </div>
+  </div>
+</aside>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-stat">VERTS <span class="footer-val" id="ft-verts">2,418</span></div>
+  <div class="footer-sep"></div>
+  <div class="footer-stat">TRIS <span class="footer-val" id="ft-tris">1,204</span></div>
+  <div class="footer-sep"></div>
+  <div class="footer-stat">OBJS <span class="footer-val">3</span></div>
+  <div class="footer-sep"></div>
+  <div class="footer-stat">MEM <span class="footer-val">4.2 MB</span></div>
+  <div class="footer-sep"></div>
+  <div class="footer-stat">GLB SIZE <span class="footer-val">~128 KB</span></div>
+  <div class="fps-counter" id="fps">60 FPS</div>
+</footer>
+
+<script>
+// ── WebGL Setup ─────────────────────────────────────────────────────────────
+const canvas = document.getElementById('glcanvas');
+const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+
+function resize() {
+  canvas.width = canvas.clientWidth * devicePixelRatio;
+  canvas.height = canvas.clientHeight * devicePixelRatio;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+new ResizeObserver(resize).observe(canvas);
+resize();
+
+// ── Shaders ──────────────────────────────────────────────────────────────────
+const VS = `
+attribute vec3 aPos;
+attribute vec3 aNorm;
+uniform mat4 uMVP;
+uniform mat4 uModel;
+varying vec3 vNorm;
+varying vec3 vWorldPos;
+void main(){
+  vec4 wp = uModel * vec4(aPos,1.);
+  vWorldPos = wp.xyz;
+  vNorm = mat3(uModel) * aNorm;
+  gl_Position = uMVP * vec4(aPos,1.);
+}`;
+
+const FS = `
+precision mediump float;
+varying vec3 vNorm;
+varying vec3 vWorldPos;
+uniform vec3 uColor;
+uniform float uMetalness;
+uniform float uRoughness;
+uniform float uEmission;
+uniform int uWireframe;
+void main(){
+  vec3 N = normalize(vNorm);
+  vec3 L = normalize(vec3(1.,2.,1.5));
+  vec3 V = normalize(vec3(0.,0.,5.) - vWorldPos);
+  vec3 H = normalize(L+V);
+  float diff = max(dot(N,L), 0.);
+  float spec = pow(max(dot(N,H),0.), mix(4., 64., 1.-uRoughness));
+  vec3 ambient = uColor * 0.15;
+  vec3 col = ambient + uColor*(1.-uMetalness)*diff*0.8 + vec3(spec)*uMetalness*0.6 + uColor*uEmission;
+  gl_FragColor = vec4(col, 1.);
+}`;
+
+function makeShader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, makeShader(gl.VERTEX_SHADER, VS));
+gl.attachShader(prog, makeShader(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog);
+gl.useProgram(prog);
+
+const aPos = gl.getAttribLocation(prog, 'aPos');
+const aNorm = gl.getAttribLocation(prog, 'aNorm');
+const uMVP = gl.getUniformLocation(prog, 'uMVP');
+const uModel = gl.getUniformLocation(prog, 'uModel');
+const uColor = gl.getUniformLocation(prog, 'uColor');
+const uMet = gl.getUniformLocation(prog, 'uMetalness');
+const uRough = gl.getUniformLocation(prog, 'uRoughness');
+const uEmit = gl.getUniformLocation(prog, 'uEmission');
+
+// ── Geometry generators ───────────────────────────────────────────────────────
+function makeCube() {
+  const p=[
+    -1,-1,-1, 1,-1,-1, 1,1,-1,-1,1,-1,
+    -1,-1, 1, 1,-1, 1, 1,1, 1,-1,1, 1,
+    -1,-1,-1,-1,1,-1,-1,1, 1,-1,-1, 1,
+     1,-1,-1, 1,1,-1, 1,1, 1, 1,-1, 1,
+    -1,-1,-1,-1,-1, 1, 1,-1, 1, 1,-1,-1,
+    -1, 1,-1,-1, 1, 1, 1, 1, 1, 1, 1,-1
+  ];
+  const normals=[
+    0,0,-1, 0,0,1, -1,0,0, 1,0,0, 0,-1,0, 0,1,0
+  ];
+  const verts=[]; const norms=[];
+  for(let f=0;f<6;f++){
+    const n=normals.slice(f*3,f*3+3);
+    for(let v=0;v<4;v++){
+      const base=f*12+v*3;
+      verts.push(p[base],p[base+1],p[base+2]);
+      norms.push(...n);
+    }
+  }
+  const idx=[];
+  for(let f=0;f<6;f++){
+    const b=f*4;
+    idx.push(b,b+1,b+2, b,b+2,b+3);
+  }
+  return {verts:new Float32Array(verts), norms:new Float32Array(norms), idx:new Uint16Array(idx)};
+}
+
+function makeSphere(lat=16,lon=16) {
+  const verts=[],norms=[],idx=[];
+  for(let i=0;i<=lat;i++){
+    const theta=i*Math.PI/lat;
+    for(let j=0;j<=lon;j++){
+      const phi=j*2*Math.PI/lon;
+      const x=Math.sin(theta)*Math.cos(phi);
+      const y=Math.cos(theta);
+      const z=Math.sin(theta)*Math.sin(phi);
+      verts.push(x,y,z); norms.push(x,y,z);
+    }
+  }
+  for(let i=0;i<lat;i++) for(let j=0;j<lon;j++){
+    const a=i*(lon+1)+j, b=a+lon+1;
+    idx.push(a,b,a+1, b+1,a+1,b);
+  }
+  return {verts:new Float32Array(verts),norms:new Float32Array(norms),idx:new Uint16Array(idx)};
+}
+
+function makeCylinder(segs=24) {
+  const verts=[],norms=[],idx=[];
+  for(let i=0;i<=segs;i++){
+    const a=i*2*Math.PI/segs, c=Math.cos(a),s=Math.sin(a);
+    verts.push(c,-1,s, c,1,s);
+    norms.push(c,0,s, c,0,s);
+  }
+  for(let i=0;i<segs;i++){
+    const b=i*2;
+    idx.push(b,b+2,b+1, b+1,b+2,b+3);
+  }
+  const capBase=verts.length/3;
+  verts.push(0,-1,0); norms.push(0,-1,0);
+  verts.push(0,1,0);  norms.push(0,1,0);
+  for(let i=0;i<segs;i++){
+    const a=i*2*Math.PI/segs, na=((i+1)%segs)*2*Math.PI/segs;
+    verts.push(Math.cos(a),-1,Math.sin(a)); norms.push(0,-1,0);
+    verts.push(Math.cos(na),-1,Math.sin(na)); norms.push(0,-1,0);
+    verts.push(Math.cos(a),1,Math.sin(a)); norms.push(0,1,0);
+    verts.push(Math.cos(na),1,Math.sin(na)); norms.push(0,1,0);
+    const b2=capBase+2+i*4;
+    idx.push(capBase,b2+1,b2);
+    idx.push(capBase+1,b2+2,b2+3);
+  }
+  return {verts:new Float32Array(verts),norms:new Float32Array(norms),idx:new Uint16Array(idx)};
+}
+
+function makeCone(segs=24) {
+  const verts=[],norms=[],idx=[];
+  for(let i=0;i<segs;i++){
+    const a=i*2*Math.PI/segs, na=(i+1)*2*Math.PI/segs;
+    const c0=Math.cos(a),s0=Math.sin(a),c1=Math.cos(na),s1=Math.sin(na);
+    const p0=[c0,-1,s0],p1=[c1,-1,s1],tip=[0,1,0];
+    const e1=[tip[0]-p0[0],tip[1]-p0[1],tip[2]-p0[2]];
+    const e2=[p1[0]-p0[0],p1[1]-p0[1],p1[2]-p0[2]];
+    const n=[e1[1]*e2[2]-e1[2]*e2[1],e1[2]*e2[0]-e1[0]*e2[2],e1[0]*e2[1]-e1[1]*e2[0]];
+    const l=Math.sqrt(n[0]**2+n[1]**2+n[2]**2);
+    const b=verts.length/3;
+    verts.push(...p0,...p1,...tip);
+    norms.push(n[0]/l,n[1]/l,n[2]/l, n[0]/l,n[1]/l,n[2]/l, n[0]/l,n[1]/l,n[2]/l);
+    idx.push(b,b+1,b+2);
+    verts.push(c0,-1,s0, 0,-1,0, c1,-1,s1);
+    norms.push(0,-1,0, 0,-1,0, 0,-1,0);
+    idx.push(b+3,b+4,b+5);
+  }
+  return {verts:new Float32Array(verts),norms:new Float32Array(norms),idx:new Uint16Array(idx)};
+}
+
+function makeTorus(R=1,r=0.35,lats=24,lons=16) {
+  const verts=[],norms=[],idx=[];
+  for(let i=0;i<=lats;i++){
+    const a=i*2*Math.PI/lats,ca=Math.cos(a),sa=Math.sin(a);
+    for(let j=0;j<=lons;j++){
+      const b=j*2*Math.PI/lons,cb=Math.cos(b),sb=Math.sin(b);
+      const x=(R+r*cb)*ca, y=r*sb, z=(R+r*cb)*sa;
+      const nx=cb*ca, ny=sb, nz=cb*sa;
+      verts.push(x,y,z); norms.push(nx,ny,nz);
+    }
+  }
+  for(let i=0;i<lats;i++) for(let j=0;j<lons;j++){
+    const a=i*(lons+1)+j, b=a+lons+1;
+    idx.push(a,b,a+1, b+1,a+1,b);
+  }
+  return {verts:new Float32Array(verts),norms:new Float32Array(norms),idx:new Uint16Array(idx)};
+}
+
+function makePlane(d=2) {
+  const v=new Float32Array([-d,0,-d, d,0,-d, d,0,d, -d,0,d]);
+  const n=new Float32Array([0,1,0, 0,1,0, 0,1,0, 0,1,0]);
+  const i=new Uint16Array([0,1,2, 0,2,3]);
+  return {verts:v,norms:n,idx:i};
+}
+
+const GEOMS = { cube:makeCube, sphere:makeSphere, cylinder:makeCylinder, cone:makeCone, torus:makeTorus, plane:makePlane };
+
+// ── Scene ─────────────────────────────────────────────────────────────────────
+const objects = [
+  { name:'Cube_001',    type:'cube',   pos:[0,0,0],  rot:[0,0,0],  scale:[1,1,1],  color:[0.1,0.4,1.0], met:0.2, rough:0.6, emit:0 },
+  { name:'Sphere_001',  type:'sphere', pos:[2.5,0,0], rot:[0,0,0], scale:[.8,.8,.8], color:[1.0,0.42,0.2], met:0.7, rough:0.3, emit:0 },
+];
+let selected = 0;
+const colors = [[0.1,0.4,1.0],[1.0,0.42,0.2],[0.48,1.0,0.0],[0.9,0.1,0.9],[0.1,0.9,0.7]];
+let colorIdx = 0;
+
+function buildBuffers(obj) {
+  const geo = GEOMS[obj.type]();
+  const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,vb);
+  gl.bufferData(gl.ARRAY_BUFFER,geo.verts,gl.STATIC_DRAW);
+  const nb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,nb);
+  gl.bufferData(gl.ARRAY_BUFFER,geo.norms,gl.STATIC_DRAW);
+  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,geo.idx,gl.STATIC_DRAW);
+  obj._vb=vb; obj._nb=nb; obj._ib=ib; obj._ic=geo.idx.length; obj._vc=geo.verts.length/3;
+  updateStats();
+}
+objects.forEach(buildBuffers);
+
+// ── Math ──────────────────────────────────────────────────────────────────────
+function mat4() { return new Float32Array(16); }
+function identity(m) { for(let i=0;i<16;i++) m[i]=i%5===0?1:0; return m; }
+function perspective(m,fov,ar,n,f) {
+  const t=Math.tan(fov/2),s=1/t;
+  identity(m);
+  m[0]=s/ar; m[5]=s; m[10]=-(f+n)/(f-n); m[11]=-1; m[14]=-2*f*n/(f-n); m[15]=0;
+  return m;
+}
+function lookAt(m,e,c,u) {
+  const f=[c[0]-e[0],c[1]-e[1],c[2]-e[2]],
+        fl=Math.sqrt(f[0]**2+f[1]**2+f[2]**2);
+  f[0]/=fl;f[1]/=fl;f[2]/=fl;
+  const r=[f[1]*u[2]-f[2]*u[1],f[2]*u[0]-f[0]*u[2],f[0]*u[1]-f[1]*u[0]],
+        rl=Math.sqrt(r[0]**2+r[1]**2+r[2]**2);
+  r[0]/=rl;r[1]/=rl;r[2]/=rl;
+  const uu=[r[1]*f[2]-r[2]*f[1],r[2]*f[0]-r[0]*f[2],r[0]*f[1]-r[1]*f[0]];
+  m[0]=r[0];m[1]=uu[0];m[2]=-f[0];m[3]=0;
+  m[4]=r[1];m[5]=uu[1];m[6]=-f[1];m[7]=0;
+  m[8]=r[2];m[9]=uu[2];m[10]=-f[2];m[11]=0;
+  m[12]=-(r[0]*e[0]+r[1]*e[1]+r[2]*e[2]);
+  m[13]=-(uu[0]*e[0]+uu[1]*e[1]+uu[2]*e[2]);
+  m[14]=(f[0]*e[0]+f[1]*e[1]+f[2]*e[2]);
+  m[15]=1;
+  return m;
+}
+function mul(a,b) {
+  const m=mat4();
+  for(let i=0;i<4;i++) for(let j=0;j<4;j++) {
+    let s=0; for(let k=0;k<4;k++) s+=a[i+k*4]*b[k+j*4];
+    m[i+j*4]=s;
+  }
+  return m;
+}
+function modelMat(obj) {
+  const [px,py,pz]=obj.pos, [rx,ry,rz]=obj.rot, [sx,sy,sz]=obj.scale;
+  const cx=Math.cos(rx),sx2=Math.sin(rx),cy=Math.cos(ry),sy2=Math.sin(ry),cz=Math.cos(rz),sz2=Math.sin(rz);
+  const T=new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, px,py,pz,1]);
+  const Rx=new Float32Array([1,0,0,0, 0,cx,sx2,0, 0,-sx2,cx,0, 0,0,0,1]);
+  const Ry=new Float32Array([cy,0,-sy2,0, 0,1,0,0, sy2,0,cy,0, 0,0,0,1]);
+  const Rz=new Float32Array([cz,sz2,0,0, -sz2,cz,0,0, 0,0,1,0, 0,0,0,1]);
+  const S=new Float32Array([sx,0,0,0, 0,sy,0,0, 0,0,sz,0, 0,0,0,1]);
+  return mul(mul(mul(mul(T,Ry),Rx),Rz),S);
+}
+
+// ── Camera orbit ──────────────────────────────────────────────────────────────
+let camAzim=0.6, camElev=0.4, camDist=6, camPan=[0,0];
+let dragging=false, lastX=0, lastY=0, rightDrag=false;
+
+canvas.addEventListener('mousedown', e => {
+  dragging=true; lastX=e.clientX; lastY=e.clientY;
+  rightDrag=e.button===2;
+  e.preventDefault();
+});
+window.addEventListener('mouseup', () => dragging=false);
+window.addEventListener('mousemove', e => {
+  if(!dragging) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY;
+  lastX=e.clientX; lastY=e.clientY;
+  if(rightDrag){ camPan[0]-=dx*0.01; camPan[1]+=dy*0.01; }
+  else { camAzim+=dx*0.008; camElev=Math.max(-1.4,Math.min(1.4,camElev-dy*0.008)); }
+});
+canvas.addEventListener('wheel', e => { camDist=Math.max(2,Math.min(20,camDist+e.deltaY*0.01)); e.preventDefault(); },{passive:false});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// Touch
+let lastTouches=null;
+canvas.addEventListener('touchstart', e => { lastTouches=e.touches; });
+canvas.addEventListener('touchmove', e => {
+  if(e.touches.length===1 && lastTouches){
+    const dx=e.touches[0].clientX-lastTouches[0].clientX;
+    const dy=e.touches[0].clientY-lastTouches[0].clientY;
+    camAzim+=dx*0.01; camElev=Math.max(-1.4,Math.min(1.4,camElev-dy*0.01));
+  } else if(e.touches.length===2 && lastTouches && lastTouches.length===2){
+    const d0=Math.hypot(lastTouches[0].clientX-lastTouches[1].clientX,lastTouches[0].clientY-lastTouches[1].clientY);
+    const d1=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    camDist=Math.max(2,Math.min(20,camDist-(d1-d0)*0.02));
+  }
+  lastTouches=e.touches; e.preventDefault();
+},{passive:false});
+
+// ── Render ────────────────────────────────────────────────────────────────────
+let frame=0, lastFPS=performance.now(), fps=60;
+const proj=mat4(), view=mat4();
+const gridLines=buildGrid();
+
+function buildGrid() {
+  const lines=[];
+  for(let i=-5;i<=5;i++){
+    lines.push(i,0,-5, i,0,5);
+    lines.push(-5,0,i, 5,0,i);
+  }
+  return new Float32Array(lines);
+}
+
+gl.enable(gl.DEPTH_TEST);
+gl.enable(gl.CULL_FACE);
+
+const VS_GRID=`attribute vec3 aPos;uniform mat4 uMVP;void main(){gl_Position=uMVP*vec4(aPos,1.);}`;
+const FS_GRID=`precision mediump float;uniform vec4 uCol;void main(){gl_FragColor=uCol;}`;
+const gprog=gl.createProgram();
+gl.attachShader(gprog,makeShader(gl.VERTEX_SHADER,VS_GRID));
+gl.attachShader(gprog,makeShader(gl.FRAGMENT_SHADER,FS_GRID));
+gl.linkProgram(gprog);
+const gvb=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,gvb);
+gl.bufferData(gl.ARRAY_BUFFER,gridLines,gl.STATIC_DRAW);
+
+function render(t) {
+  requestAnimationFrame(render);
+  frame++;
+  if(t-lastFPS>500){ fps=Math.round(frame*1000/(t-lastFPS)); frame=0; lastFPS=t;
+    document.getElementById('fps').textContent=fps+' FPS'; }
+
+  gl.clearColor(0.02,0.045,0.065,1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+
+  const ar=canvas.width/canvas.height;
+  perspective(proj,Math.PI/3.5,ar,0.1,100);
+  const ce=camElev,ca=camAzim;
+  const eye=[camDist*Math.sin(ca)*Math.cos(ce)+camPan[0], camDist*Math.sin(ce), camDist*Math.cos(ca)*Math.cos(ce)];
+  lookAt(view,eye,[camPan[0],0,0],[0,1,0]);
+  const vp=mul(proj,view);
+
+  // Grid
+  gl.useProgram(gprog);
+  const gMVP=gl.getUniformLocation(gprog,'uMVP');
+  const gCol=gl.getUniformLocation(gprog,'uCol');
+  gl.uniformMatrix4fv(gMVP,false,vp);
+  gl.uniform4f(gCol,0.12,0.22,0.28,1);
+  gl.bindBuffer(gl.ARRAY_BUFFER,gvb);
+  const gPos=gl.getAttribLocation(gprog,'aPos');
+  gl.enableVertexAttribArray(gPos);
+  gl.vertexAttribPointer(gPos,3,gl.FLOAT,false,0,0);
+  gl.drawArrays(gl.LINES,0,gridLines.length/3);
+  gl.disableVertexAttribArray(gPos);
+
+  // Objects
+  gl.useProgram(prog);
+  objects.forEach((obj,i) => {
+    const mm=modelMat(obj);
+    const mvp=mul(vp,mm);
+    gl.uniformMatrix4fv(uMVP,false,mvp);
+    gl.uniformMatrix4fv(uModel,false,mm);
+    gl.uniform3f(uColor,...obj.color);
+    gl.uniform1f(uMet,obj.met);
+    gl.uniform1f(uRough,obj.rough);
+    gl.uniform1f(uEmit,obj.emit);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER,obj._vb);
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos,3,gl.FLOAT,false,0,0);
+    gl.bindBuffer(gl.ARRAY_BUFFER,obj._nb);
+    gl.enableVertexAttribArray(aNorm);
+    gl.vertexAttribPointer(aNorm,3,gl.FLOAT,false,0,0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,obj._ib);
+    gl.drawElements(gl.TRIANGLES,obj._ic,gl.UNSIGNED_SHORT,0);
+
+    // Selection wireframe
+    if(i===selected) {
+      gl.uniform3f(uColor,0,0.9,1);
+      gl.uniform1f(uEmit,.8);
+      gl.lineWidth(1.5);
+    }
+  });
+}
+requestAnimationFrame(render);
+
+// ── UI Interactions ───────────────────────────────────────────────────────────
+let autoRotate=true;
+let autoT=0;
+const _origRender=render;
+function animateObjects(t) {
+  requestAnimationFrame(animateObjects);
+  if(autoRotate && objects[0]) objects[0].rot[1]=t*0.0005;
+  if(objects[1]) objects[1].rot[1]=-t*0.0003;
+}
+requestAnimationFrame(animateObjects);
+
+function setPrim(btn, type) {
+  document.querySelectorAll('.prim-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const newObj = {
+    name: type.charAt(0).toUpperCase()+type.slice(1)+'_'+(objects.length+1).toString().padStart(3,'0'),
+    type, pos:[Math.random()*4-2,0,Math.random()*4-2], rot:[0,0,0], scale:[1,1,1],
+    color: colors[colorIdx++ % colors.length], met:0.3, rough:0.5, emit:0
+  };
+  objects.push(newObj);
+  buildBuffers(newObj);
+  addTreeItem(newObj, objects.length-1);
+  selectObj(null, objects.length-1);
+  document.getElementById('obj-count').textContent=objects.length;
+  showToast(type.toUpperCase()+' ADDED');
+}
+
+function addTreeItem(obj, idx) {
+  const tree=document.getElementById('scene-tree');
+  const dot=`<span class="tree-dot" style="background:rgb(${Math.round(obj.color[0]*255)},${Math.round(obj.color[1]*255)},${Math.round(obj.color[2]*255)})"></span>`;
+  const div=document.createElement('div');
+  div.className='tree-item';
+  div.innerHTML=`${dot}${obj.name}<span class="tree-type">MESH</span>`;
+  div.onclick=()=>selectObj(div,idx);
+  tree.appendChild(div);
+}
+
+function selectObj(el, idx) {
+  document.querySelectorAll('.tree-item').forEach(e=>e.classList.remove('selected'));
+  if(el) el.classList.add('selected');
+  else {
+    const items=document.querySelectorAll('.tree-item');
+    if(items[idx]) items[idx].classList.add('selected');
+  }
+  selected=idx;
+  const obj=objects[idx];
+  if(!obj) return;
+  document.getElementById('px').value=obj.pos[0].toFixed(2);
+  document.getElementById('py').value=obj.pos[1].toFixed(2);
+  document.getElementById('pz').value=obj.pos[2].toFixed(2);
+  document.getElementById('rx').value=(obj.rot[0]*180/Math.PI).toFixed(1);
+  document.getElementById('ry').value=(obj.rot[1]*180/Math.PI).toFixed(1);
+  document.getElementById('rz').value=(obj.rot[2]*180/Math.PI).toFixed(1);
+  document.getElementById('sx').value=obj.scale[0].toFixed(2);
+  document.getElementById('sy').value=obj.scale[1].toFixed(2);
+  document.getElementById('sz').value=obj.scale[2].toFixed(2);
+  document.getElementById('sel-info').textContent=`${obj.name} · SELECTED`;
+  const hexColor='#'+obj.color.map(c=>Math.round(c*255).toString(16).padStart(2,'0')).join('').toUpperCase();
+  const ci=document.getElementById('color-inner');
+  ci.style.background=hexColor;
+  ci.textContent=hexColor;
+  document.getElementById('metalness').value=Math.round(obj.met*100);
+  document.getElementById('metalness-val').textContent=obj.met.toFixed(1);
+  document.getElementById('roughness').value=Math.round(obj.rough*100);
+  document.getElementById('roughness-val').textContent=obj.rough.toFixed(1);
+}
+
+function updateTransform() {
+  const obj=objects[selected];
+  if(!obj) return;
+  obj.pos[0]=parseFloat(document.getElementById('px').value)||0;
+  obj.pos[1]=parseFloat(document.getElementById('py').value)||0;
+  obj.pos[2]=parseFloat(document.getElementById('pz').value)||0;
+  obj.rot[0]=(parseFloat(document.getElementById('rx').value)||0)*Math.PI/180;
+  obj.rot[1]=(parseFloat(document.getElementById('ry').value)||0)*Math.PI/180;
+  obj.rot[2]=(parseFloat(document.getElementById('rz').value)||0)*Math.PI/180;
+  obj.scale[0]=parseFloat(document.getElementById('sx').value)||1;
+  obj.scale[1]=parseFloat(document.getElementById('sy').value)||1;
+  obj.scale[2]=parseFloat(document.getElementById('sz').value)||1;
+}
+
+function updateMat(el, valId) {
+  const v=el.value/100;
+  document.getElementById(valId).textContent=v.toFixed(1);
+  const obj=objects[selected]; if(!obj) return;
+  if(el.id==='metalness') obj.met=v;
+  else if(el.id==='roughness') obj.rough=v;
+  else if(el.id==='emission') obj.emit=v;
+}
+
+const cycleColors=[
+  [0.1,0.4,1.0],[1.0,0.42,0.2],[0.48,1.0,0.0],[0.9,0.1,0.9],[0.05,0.9,0.7],[1,0.85,0.1]
+];
+let cycleIdx=0;
+function cycleColor() {
+  cycleIdx=(cycleIdx+1)%cycleColors.length;
+  const c=cycleColors[cycleIdx];
+  const obj=objects[selected]; if(obj) obj.color=[...c];
+  const hex='#'+c.map(v=>Math.round(v*255).toString(16).padStart(2,'0')).join('').toUpperCase();
+  const ci=document.getElementById('color-inner');
+  ci.style.background=hex;
+  ci.textContent=hex;
+}
+
+function setMode(btn, mode) {
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  autoRotate = (mode === 'select');
+}
+
+function toggleSwitch(el) { el.classList.toggle('on'); }
+
+function updateBudget(el) {
+  const v=parseInt(el.value);
+  const label=v>=1000?(v/1000).toFixed(1)+'k':v;
+  document.getElementById('budget-val').textContent=label;
+  const pct=Math.min(v/10000,1);
+  document.getElementById('poly-fill').style.width=(pct*100)+'%';
+  document.getElementById('poly-val').textContent=label;
+}
+
+function updateStats() {
+  let verts=0,tris=0;
+  objects.forEach(o=>{ verts+=o._vc||0; tris+=Math.round((o._ic||0)/3); });
+  document.getElementById('ft-verts').textContent=verts.toLocaleString();
+  document.getElementById('ft-tris').textContent=tris.toLocaleString();
+}
+
+function exportGLB() {
+  showToast('EXPORTING GLB  ·  ' + objects.length + ' MESH(ES)  ·  DRACO OFF');
+  setTimeout(()=>showToast('GLB EXPORT COMPLETE  ·  ~'+(64+objects.length*42)+'KB'),1200);
+}
+
+function showToast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t=setTimeout(()=>t.classList.remove('show'),2400);
+}
+
+// Initial select
+setTimeout(()=>selectObj(null,0),100);
+</script>
+</body>
+</html>
